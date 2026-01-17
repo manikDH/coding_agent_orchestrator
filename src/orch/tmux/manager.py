@@ -1,5 +1,6 @@
 """tmux session management for parallel agent execution."""
 
+import shlex
 import shutil
 from typing import Any
 
@@ -126,14 +127,15 @@ class TmuxManager:
             prompt: The prompt to execute.
             working_dir: Working directory.
         """
-        # Escape the prompt for shell
-        escaped_prompt = prompt.replace("'", "'\\''")
+        # Use shlex.quote for proper shell escaping (handles newlines, quotes, etc.)
+        escaped_prompt = shlex.quote(prompt)
 
         if working_dir:
-            pane.send_keys(f"cd '{working_dir}'", enter=True)
+            escaped_dir = shlex.quote(working_dir)
+            pane.send_keys(f"cd {escaped_dir}", enter=True)
 
         # Build the orch command for this agent
-        cmd = f"orch {agent_name} '{escaped_prompt}'"
+        cmd = f"orch {agent_name} {escaped_prompt}"
         pane.send_keys(cmd, enter=True)
 
     def run_parallel_agents(

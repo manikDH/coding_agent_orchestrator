@@ -93,7 +93,11 @@ class BaseAgent(AgentAdapter):
         output_format: OutputFormat = OutputFormat.TEXT,
         **kwargs: Any,
     ):
-        """Execute with streaming output."""
+        """Execute with streaming output.
+
+        Properly handles stderr draining and process cleanup to avoid deadlocks.
+        Yields stdout chunks, then yields a final ExecutionResult with any errors.
+        """
         cmd = self.build_command(
             prompt=prompt,
             output_format=OutputFormat.STREAM if self.get_capabilities().supports_streaming else output_format,
@@ -108,9 +112,34 @@ class BaseAgent(AgentAdapter):
             stderr=asyncio.subprocess.PIPE,
         )
 
-        if proc.stdout:
-            async for line in proc.stdout:
-                yield line.decode("utf-8", errors="replace")
+        stderr_chunks: list[bytes] = []
+
+        async def drain_stderr() -> None:
+            """Drain stderr to prevent buffer deadlock."""
+            if proc.stderr:
+                async for chunk in proc.stderr:
+                    stderr_chunks.append(chunk)
+
+        # Start draining stderr concurrently
+        stderr_task = asyncio.create_task(drain_stderr())
+
+        try:
+            if proc.stdout:
+                async for line in proc.stdout:
+                    yield line.decode("utf-8", errors="replace")
+        finally:
+            # Wait for stderr drain to complete
+            await stderr_task
+
+            # Wait for process to exit
+            await proc.wait()
+
+            # If there was an error, yield error info
+            if proc.returncode and proc.returncode != 0:
+                stderr_text = b"".join(stderr_chunks).decode("utf-8", errors="replace")
+                yield f"\n[Error: Process exited with code {proc.returncode}]\n"
+                if stderr_text:
+                    yield f"[stderr: {stderr_text}]\n"
 
     def get_version(self) -> str | None:
         """Get the CLI version if available."""

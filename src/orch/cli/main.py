@@ -63,39 +63,29 @@ def _create_agent_command(agent_name: str) -> click.Command:
 
 
 def _get_model_for_complexity(
-    agent_name: str,
+    agent_config: Any,
     complexity: str | None,
-    default_model: str | None,
 ) -> str | None:
     """Select appropriate model based on task complexity.
 
     Args:
-        agent_name: Name of the agent.
+        agent_config: The agent's configuration (AgentConfig).
         complexity: Task complexity level (low, medium, high).
-        default_model: Default model from config.
 
     Returns:
         Model name to use.
     """
     if complexity is None:
-        return default_model
+        return agent_config.model
 
-    # Model tiers for each agent
-    model_tiers = {
-        "gemini": {
-            "low": "gemini-1.5-flash",      # Fast, cheap
-            "medium": "gemini-2.0-flash",   # Balanced
-            "high": "gemini-2.0-pro",       # Most capable
-        },
-        "codex": {
-            "low": "gpt-4o-mini",           # Fast, cheap
-            "medium": "gpt-4.1",            # Balanced
-            "high": "o3",                   # Most capable (reasoning)
-        },
-    }
+    # Get model from configured tiers
+    if agent_config.model_tiers:
+        tier_model = getattr(agent_config.model_tiers, complexity, None)
+        if tier_model:
+            return tier_model
 
-    agent_models = model_tiers.get(agent_name, {})
-    return agent_models.get(complexity, default_model)
+    # Fall back to default model
+    return agent_config.model
 
 
 async def _execute_agent(
@@ -127,9 +117,7 @@ async def _execute_agent(
     agent_config = config.get_agent_config(agent_name)
 
     # Select model based on complexity
-    selected_model = model or _get_model_for_complexity(
-        agent_name, complexity, agent_config.model
-    )
+    selected_model = model or _get_model_for_complexity(agent_config, complexity)
 
     extra_args: dict[str, Any] = {}
     if agent_config.approval_mode:

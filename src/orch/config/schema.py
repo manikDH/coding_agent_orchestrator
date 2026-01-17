@@ -6,11 +6,20 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 
+class ModelTiers(BaseModel):
+    """Model tiers for complexity-based selection."""
+
+    low: str | None = None  # Fast, cheap
+    medium: str | None = None  # Balanced
+    high: str | None = None  # Most capable
+
+
 class AgentConfig(BaseModel):
     """Configuration for a specific agent."""
 
     enabled: bool = True
     model: str | None = None
+    model_tiers: ModelTiers | None = None
     approval_mode: str | None = None
     sandbox: str | None = None
     extra_args: dict[str, Any] = Field(default_factory=dict)
@@ -94,12 +103,30 @@ class OrchConfig(BaseModel):
             agents={
                 "gemini": AgentConfig(
                     model="gemini-2.0-flash",
+                    model_tiers=ModelTiers(
+                        low="gemini-1.5-flash",
+                        medium="gemini-2.0-flash",
+                        high="gemini-2.0-pro",
+                    ),
                     approval_mode="auto_edit",
                 ),
                 "codex": AgentConfig(
                     model="gpt-5.2-codex",
+                    model_tiers=ModelTiers(
+                        low="gpt-4o-mini",
+                        medium="gpt-4.1",
+                        high="o3",
+                    ),
                     approval_mode="on-request",
                     sandbox="workspace-write",
+                ),
+                "claude": AgentConfig(
+                    model="sonnet",
+                    model_tiers=ModelTiers(
+                        low="haiku",
+                        medium="sonnet",
+                        high="opus",
+                    ),
                 ),
             }
         )

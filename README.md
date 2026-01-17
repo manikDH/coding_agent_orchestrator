@@ -27,6 +27,7 @@ pip install -e .
 
 - Python 3.11+
 - At least one AI CLI installed:
+  - `claude` - Anthropic Claude Code CLI
   - `gemini` - Google Gemini CLI
   - `codex` - OpenAI Codex CLI
 - `tmux` (optional, for parallel execution)
@@ -35,14 +36,18 @@ pip install -e .
 
 ```bash
 # Direct agent access
+orch claude "refactor this function"
 orch gemini "explain recursion"
 orch codex "implement binary search"
 
 # Smart routing (auto-picks best agent)
-orch "what does this error mean?"      # Routes to Gemini
-orch "fix this null pointer exception" # Routes to Codex
+orch ask "what does this error mean?"      # Routes to Gemini
+orch ask "fix this null pointer exception" # Routes to Codex
 
-# Compare agents
+# With complexity-based model selection
+orch ask --complexity high "design a distributed system"
+
+# Compare agents side-by-side
 orch compare "implement a sorting algorithm"
 
 # Run competition in tmux
@@ -52,13 +57,22 @@ orch tmux compete "implement caching layer"
 ## Commands
 
 ```
-orch [PROMPT]                     # Execute with smart routing
-orch <agent> [PROMPT]             # Use specific agent
+orch ask [PROMPT]                 # Execute with smart routing
+orch <agent> [PROMPT]             # Use specific agent (gemini, codex)
 orch compare [PROMPT]             # Compare multiple agents
 orch tmux compete [PROMPT]        # Competition in tmux panes
 orch agent list                   # List available agents
 orch agent info <name>            # Show agent details
 orch config show                  # Show configuration
+```
+
+### Options
+
+```
+--complexity [low|medium|high]    # Select model tier based on task complexity
+-m, --model TEXT                  # Override model selection
+-s, --stream                      # Stream output in real-time
+--json                            # Output in JSON format
 ```
 
 ## Configuration
@@ -78,6 +92,10 @@ code = ["codex", "gemini"]
 explain = ["gemini", "codex"]
 debug = ["codex", "gemini"]
 
+[agents.claude]
+model = "sonnet"
+model_tiers = { low = "haiku", medium = "sonnet", high = "opus" }
+
 [agents.gemini]
 model = "gemini-2.0-flash"
 approval_mode = "auto_edit"
@@ -86,6 +104,60 @@ approval_mode = "auto_edit"
 model = "gpt-5.2-codex"
 sandbox = "workspace-write"
 ```
+
+## Agent Capabilities & Limitations
+
+Each agent has different capabilities when invoked via orch. Understanding these helps you choose the right agent for your task.
+
+### Capability Matrix
+
+| Capability | Claude | Codex | Gemini |
+|------------|--------|-------|--------|
+| **File Creation** | ✅ Full | ✅ Full | ❌ Limited |
+| **File Editing** | ✅ Full | ✅ Full | ❌ Limited |
+| **Shell Commands** | ✅ Full | ✅ Full | ❌ Limited |
+| **Streaming Output** | ✅ | ✅ | ✅ |
+| **Session Persistence** | ❌ | ❌ | ✅ |
+| **Code Generation** | ✅ Excellent | ✅ Excellent | ✅ Good |
+| **Explanations** | ✅ Good | ✅ Good | ✅ Excellent |
+
+### Detailed Limitations
+
+#### Gemini CLI
+- **No filesystem access**: Cannot create, edit, or delete files directly
+- **No shell execution**: Cannot run shell commands like `write_file` or `run_shell_command`
+- **Best for**: Explanations, analysis, research, answering questions
+- **Workaround**: Use Gemini to generate code, then manually create files or pipe output
+
+#### Codex CLI
+- **Full filesystem access**: Can create and edit files in the workspace
+- **Shell execution**: Can run commands within sandbox boundaries
+- **Best for**: Implementation tasks, refactoring, file creation, debugging
+- **Note**: Operates within sandbox permissions (`workspace-write` by default)
+
+#### Claude CLI
+- **Full filesystem access**: Can create, edit, and manage files
+- **Shell execution**: Can run shell commands with appropriate permissions
+- **Best for**: Complex coding tasks, architecture, refactoring, debugging
+- **Note**: Use `--dangerously-skip-permissions` for unrestricted access (use with caution)
+
+### Choosing the Right Agent
+
+| Task Type | Recommended Agent | Reason |
+|-----------|-------------------|--------|
+| Implement a feature | `codex` or `claude` | Need file creation |
+| Explain code | `gemini` | Strong at analysis |
+| Debug an error | `codex` or `claude` | Need to edit files |
+| Generate documentation | `gemini` | Good at writing |
+| Refactor codebase | `claude` | Understands architecture |
+| Quick code snippet | Any | All handle this well |
+
+### Competition Mode Insights
+
+When running `orch tmux compete`, keep in mind:
+- Gemini will provide code output but cannot write files - you'll need to copy the output
+- Codex and Claude will directly create/modify files in your workspace
+- Use competition mode to compare approaches, then cherry-pick the best implementation
 
 ## Adding New Agents
 

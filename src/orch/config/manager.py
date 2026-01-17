@@ -35,26 +35,27 @@ class ConfigManager:
         1. Project-level config (.orch.toml in cwd or parents)
         2. User config (~/.config/orch/config.toml)
         3. Default config
-        """
-        # Start with defaults
-        config_dict: dict[str, Any] = {}
 
-        # Load user config
+        All configs are merged, so partial configs work correctly.
+        """
+        # Start with defaults - this ensures agent configs etc. are always present
+        default_config = OrchConfig.default()
+        config_dict: dict[str, Any] = default_config.model_dump(by_alias=True)
+
+        # Load user config and merge on top of defaults
         user_config_file = get_config_file()
         if user_config_file.exists():
             user_config = toml.load(user_config_file)
             config_dict = cls._deep_merge(config_dict, user_config)
 
-        # Load project config (search up from cwd)
+        # Load project config (search up from cwd) and merge on top
         project_config_file = cls._find_project_config()
         if project_config_file and project_config_file.exists():
             project_config = toml.load(project_config_file)
             config_dict = cls._deep_merge(config_dict, project_config)
 
-        # Create config object
-        if config_dict:
-            return OrchConfig.model_validate(config_dict)
-        return OrchConfig.default()
+        # Create config object from merged dict
+        return OrchConfig.model_validate(config_dict)
 
     @classmethod
     def reload(cls) -> OrchConfig:

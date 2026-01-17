@@ -1,12 +1,15 @@
 """Agent registry for discovering and managing agent backends."""
 
 import importlib.util
+import logging
 from importlib.metadata import entry_points
 from pathlib import Path
 from typing import Type
 
 from orch.agents.protocol import AgentAdapter
 from orch.config.schema import get_plugins_dir
+
+logger = logging.getLogger(__name__)
 
 
 class AgentRegistry:
@@ -45,9 +48,11 @@ class AgentRegistry:
     @classmethod
     def _load_builtin_agents(cls) -> None:
         """Load the built-in Gemini and Codex agents."""
+        from orch.agents.claude import ClaudeAgent
         from orch.agents.codex import CodexAgent
         from orch.agents.gemini import GeminiAgent
 
+        cls._register_class(ClaudeAgent)
         cls._register_class(GeminiAgent)
         cls._register_class(CodexAgent)
 
@@ -62,7 +67,7 @@ class AgentRegistry:
                     cls._register_class(agent_class)
                 except Exception as e:
                     # Log but don't fail on bad plugins
-                    print(f"Warning: Failed to load agent plugin {ep.name}: {e}")
+                    logger.warning("Failed to load agent plugin %s: %s", ep.name, e)
         except Exception:
             # entry_points() might not work in all environments
             pass
@@ -80,7 +85,7 @@ class AgentRegistry:
             try:
                 cls._load_plugin_file(plugin_file)
             except Exception as e:
-                print(f"Warning: Failed to load plugin {plugin_file.name}: {e}")
+                logger.warning("Failed to load plugin %s: %s", plugin_file.name, e)
 
     @classmethod
     def _load_plugin_file(cls, plugin_file: Path) -> None:

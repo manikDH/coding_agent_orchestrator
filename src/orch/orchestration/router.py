@@ -18,6 +18,9 @@ class Router:
     def _compile_patterns(self) -> None:
         """Compile keyword patterns for faster matching."""
         for task_type, keywords in self.config.keywords.items():
+            # Skip empty keyword lists - they would match everything
+            if not keywords:
+                continue
             # Create pattern that matches any of the keywords
             pattern = "|".join(re.escape(kw) for kw in keywords)
             self._keyword_patterns[task_type] = re.compile(pattern, re.IGNORECASE)
