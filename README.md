@@ -4,7 +4,7 @@ Claude Code as manager, AI CLIs as workers.
 
 ## Overview
 
-Orch is a CLI tool that orchestrates multiple AI agent CLIs (Gemini, Codex, and more) with Claude Code acting as an intelligent manager. It supports:
+Orch is a CLI tool that orchestrates multiple AI agent CLIs (Gemini, Codex, OpenCode, and more) with Claude Code acting as an intelligent manager. It supports:
 
 - **Direct Agent Access**: Use any AI CLI with a unified interface
 - **Smart Routing**: Automatically pick the best agent based on task type
@@ -15,12 +15,28 @@ Orch is a CLI tool that orchestrates multiple AI agent CLIs (Gemini, Codex, and 
 ## Installation
 
 ```bash
-# Clone and install with pipx
-pipx install ~/Projects/orch
+# Install from PyPI (when published)
+pip install orch
 
-# Or install in development mode
-cd ~/Projects/orch
+# Or install directly from GitHub
+pip install git+https://github.com/manikDH/coding_agent_orchestrator.git
+
+# Verify installation
+orch --help
+```
+
+### For Developers
+
+```bash
+# Clone the repository
+git clone https://github.com/manikDH/coding_agent_orchestrator.git
+cd coding_agent_orchestrator
+
+# Install in development mode
 pip install -e .
+
+# Install with dev dependencies
+pip install -e ".[dev]"
 ```
 
 ## Requirements
@@ -30,6 +46,7 @@ pip install -e .
   - `claude` - Anthropic Claude Code CLI
   - `gemini` - Google Gemini CLI
   - `codex` - OpenAI Codex CLI
+  - `opencode` - OpenCode CLI (free models)
 - `tmux` (optional, for parallel execution)
 
 ## Quick Start
@@ -39,6 +56,7 @@ pip install -e .
 orch claude "refactor this function"
 orch gemini "explain recursion"
 orch codex "implement binary search"
+orch opencode "write a utility function"  # Uses free models
 
 # Smart routing (auto-picks best agent)
 orch ask "what does this error mean?"      # Routes to Gemini
@@ -88,9 +106,9 @@ verbose = false
 enabled = true
 
 [routing.rules]
-code = ["codex", "gemini"]
-explain = ["gemini", "codex"]
-debug = ["codex", "gemini"]
+code = ["codex", "opencode", "gemini"]
+explain = ["gemini", "opencode", "codex"]
+debug = ["codex", "opencode", "gemini"]
 
 [agents.claude]
 model = "sonnet"
@@ -103,6 +121,11 @@ approval_mode = "auto_edit"
 [agents.codex]
 model = "gpt-5.2-codex"
 sandbox = "workspace-write"
+
+[agents.opencode]
+model = "opencode/grok-code"
+model_tiers = { low = "opencode/glm-4.7-free", medium = "opencode/grok-code", high = "opencode/minimax-m2.1-free" }
+extra_args = { agent = "build" }
 ```
 
 ## Agent Capabilities & Limitations
@@ -111,15 +134,16 @@ Each agent has different capabilities when invoked via orch. Understanding these
 
 ### Capability Matrix
 
-| Capability | Claude | Codex | Gemini |
-|------------|--------|-------|--------|
-| **File Creation** | ✅ Full | ✅ Full | ❌ Limited |
-| **File Editing** | ✅ Full | ✅ Full | ❌ Limited |
-| **Shell Commands** | ✅ Full | ✅ Full | ❌ Limited |
-| **Streaming Output** | ✅ | ✅ | ✅ |
-| **Session Persistence** | ❌ | ❌ | ✅ |
-| **Code Generation** | ✅ Excellent | ✅ Excellent | ✅ Good |
-| **Explanations** | ✅ Good | ✅ Good | ✅ Excellent |
+| Capability | Claude | Codex | Gemini | OpenCode |
+|------------|--------|-------|--------|----------|
+| **File Creation** | ✅ Full | ✅ Full | ❌ Limited | ✅ Full |
+| **File Editing** | ✅ Full | ✅ Full | ❌ Limited | ✅ Full |
+| **Shell Commands** | ✅ Full | ✅ Full | ❌ Limited | ✅ Full |
+| **Streaming Output** | ✅ | ✅ | ✅ | ❌ |
+| **Session Persistence** | ❌ | ❌ | ✅ | ✅ |
+| **Code Generation** | ✅ Excellent | ✅ Excellent | ✅ Good | ✅ Good |
+| **Explanations** | ✅ Good | ✅ Good | ✅ Excellent | ✅ Good |
+| **Cost** | Paid | Paid | Paid | Free |
 
 ### Detailed Limitations
 
@@ -141,6 +165,17 @@ Each agent has different capabilities when invoked via orch. Understanding these
 - **Best for**: Complex coding tasks, architecture, refactoring, debugging
 - **Note**: Use `--dangerously-skip-permissions` for unrestricted access (use with caution)
 
+#### OpenCode CLI
+- **Free models only**: Uses grok-code, glm-4.7-free, or minimax-m2.1-free
+- **Full filesystem access**: Can create and edit files
+- **Shell execution**: Can run shell commands
+- **No streaming**: Uses batch execution mode
+- **Best for**: Coding tasks when you want zero-cost AI assistance
+- **Available models**:
+  - `opencode/grok-code` (default) - Fast coding tasks
+  - `opencode/glm-4.7-free` - General coding, lightweight tasks
+  - `opencode/minimax-m2.1-free` - Analysis, complex reasoning
+
 ### Choosing the Right Agent
 
 | Task Type | Recommended Agent | Reason |
@@ -151,12 +186,14 @@ Each agent has different capabilities when invoked via orch. Understanding these
 | Generate documentation | `gemini` | Good at writing |
 | Refactor codebase | `claude` | Understands architecture |
 | Quick code snippet | Any | All handle this well |
+| Zero-cost coding | `opencode` | Free models only |
 
 ### Competition Mode Insights
 
 When running `orch tmux compete`, keep in mind:
 - Gemini will provide code output but cannot write files - you'll need to copy the output
-- Codex and Claude will directly create/modify files in your workspace
+- Codex, Claude, and OpenCode will directly create/modify files in your workspace
+- OpenCode provides a free alternative for comparison without API costs
 - Use competition mode to compare approaches, then cherry-pick the best implementation
 
 ## Adding New Agents
