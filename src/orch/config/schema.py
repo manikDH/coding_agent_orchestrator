@@ -31,10 +31,10 @@ class RoutingConfig(BaseModel):
     enabled: bool = True
     rules: dict[str, list[str]] = Field(
         default_factory=lambda: {
-            "code": ["codex", "gemini"],
-            "explain": ["gemini", "codex"],
-            "debug": ["codex", "gemini"],
-            "general": ["gemini", "codex"],
+            "code": ["codex", "opencode", "gemini"],
+            "explain": ["gemini", "opencode", "codex"],
+            "debug": ["codex", "opencode", "gemini"],
+            "general": ["gemini", "opencode", "codex"],
         }
     )
     keywords: dict[str, list[str]] = Field(
@@ -127,6 +127,15 @@ class OrchConfig(BaseModel):
                         medium="sonnet",
                         high="opus",
                     ),
+                ),
+                "opencode": AgentConfig(
+                    model="opencode/grok-code",
+                    model_tiers=ModelTiers(
+                        low="opencode/glm-4.7-free",
+                        medium="opencode/grok-code",
+                        high="opencode/minimax-m2.1-free",
+                    ),
+                    extra_args={"agent": "build"},
                 ),
             }
         )

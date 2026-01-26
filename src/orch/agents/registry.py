@@ -47,14 +47,16 @@ class AgentRegistry:
 
     @classmethod
     def _load_builtin_agents(cls) -> None:
-        """Load the built-in Gemini and Codex agents."""
+        """Load the built-in agents."""
         from orch.agents.claude import ClaudeAgent
         from orch.agents.codex import CodexAgent
         from orch.agents.gemini import GeminiAgent
+        from orch.agents.opencode import OpenCodeAgent
 
         cls._register_class(ClaudeAgent)
         cls._register_class(GeminiAgent)
         cls._register_class(CodexAgent)
+        cls._register_class(OpenCodeAgent)
 
     @classmethod
     def _load_entrypoint_agents(cls) -> None:
