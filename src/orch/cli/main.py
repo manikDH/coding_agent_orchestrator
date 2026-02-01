@@ -464,6 +464,144 @@ def orchestrate_run(prompt: tuple[str, ...], complexity: str | None, output_json
     asyncio.run(_run_orchestration())
 
 
+
+@cli.group()
+def session() -> None:
+    """Manage orchestration sessions."""
+    pass
+
+
+@session.command("list")
+@click.option("--limit", default=10, help="Number of sessions to show")
+def session_list(limit: int) -> None:
+    """List recent orchestration sessions."""
+    from orch.config.schema import get_sessions_dir
+    
+    sessions_dir = get_sessions_dir()
+    formatter = get_formatter()
+    
+    if not sessions_dir.exists():
+        formatter.print_warning("No sessions found")
+        return
+    
+    # Get all session directories
+    session_dirs = [d for d in sessions_dir.iterdir() if d.is_dir()]
+    
+    if not session_dirs:
+        formatter.print_warning("No sessions found")
+        return
+    
+    # Sort by modification time (most recent first)
+    session_dirs.sort(key=lambda d: d.stat().st_mtime, reverse=True)
+    session_dirs = session_dirs[:limit]
+    
+    formatter.console.print(f"\n[bold]Recent Sessions[/bold] (showing {len(session_dirs)}):\n")
+    
+    for session_dir in session_dirs:
+        session_id = session_dir.name
+        
+        # Try to load latest checkpoint to get state
+        try:
+            from orch.orchestration.checkpoint import CheckpointManager
+            checkpoint_mgr = CheckpointManager(session_dir)
+            latest = checkpoint_mgr.load_checkpoint()
+            
+            if latest:
+                state = latest.state_snapshot.get("state", "unknown")
+                formatter.console.print(f"  {session_id}: {state}")
+            else:
+                formatter.console.print(f"  {session_id}: no checkpoints")
+        except Exception:
+            # Handle malformed/incomplete checkpoints
+            formatter.console.print(f"  {session_id}: (error reading state)")
+
+
+@session.command("status")
+@click.argument("session_id")
+def session_status(session_id: str) -> None:
+    """Show status of an orchestration session."""
+    from orch.config.schema import get_sessions_dir
+    from orch.orchestration.checkpoint import CheckpointManager
+    
+    sessions_dir = get_sessions_dir()
+    session_dir = sessions_dir / session_id
+    formatter = get_formatter()
+    
+    if not session_dir.exists():
+        formatter.print_error(f"Session not found: {session_id}")
+        return
+    
+    checkpoint_mgr = CheckpointManager(session_dir)
+    latest = checkpoint_mgr.load_checkpoint()
+    
+    if not latest:
+        formatter.print_error(f"No checkpoints found for session: {session_id}")
+        return
+    
+    formatter.console.print(f"\n[bold]Session {session_id}[/bold]\n")
+    formatter.console.print(f"Phase: {latest.phase}")
+    formatter.console.print(f"Timestamp: {latest.timestamp}")
+    
+    snapshot = latest.state_snapshot
+    if snapshot:
+        formatter.console.print(f"\nState: {snapshot.get('state', 'unknown')}")
+        formatter.console.print(f"Iteration: {snapshot.get('iteration', 0)}")
+        
+        if "metrics" in snapshot:
+            metrics = snapshot["metrics"]
+            formatter.console.print(f"\nMetrics:")
+            formatter.console.print(f"  Executions: {metrics.get('executions_count', 0)}")
+            formatter.console.print(f"  Critique rounds: {metrics.get('critique_rounds', 0)}")
+
+
+@session.command("trace")
+@click.argument("session_id")
+@click.option("--format", "output_format", type=click.Choice(["text", "json"]), default="text")
+def session_trace(session_id: str, output_format: str) -> None:
+    """Show full trace/audit log of a session."""
+    from orch.config.schema import get_sessions_dir
+    from orch.orchestration.checkpoint import CheckpointManager
+    
+    sessions_dir = get_sessions_dir()
+    session_dir = sessions_dir / session_id
+    formatter = get_formatter()
+    
+    if not session_dir.exists():
+        formatter.print_error(f"Session not found: {session_id}")
+        return
+    
+    checkpoint_mgr = CheckpointManager(session_dir)
+    checkpoints = checkpoint_mgr.list_checkpoints()
+    
+    if not checkpoints:
+        formatter.print_error(f"No checkpoints found for session: {session_id}")
+        return
+    
+    if output_format == "json":
+        import json
+        trace_data = [
+            {
+                "phase": cp.phase,
+                "timestamp": cp.timestamp.isoformat(),
+                "data": cp.data
+            }
+            for cp in checkpoints
+        ]
+        formatter.console.print_json(json.dumps(trace_data, indent=2))
+    else:
+        formatter.console.print(f"\n[bold]Session Trace: {session_id}[/bold]\n")
+        
+        for i, checkpoint in enumerate(checkpoints, 1):
+            formatter.console.print(f"\n{i}. {checkpoint.phase} at {checkpoint.timestamp}")
+            
+            if checkpoint.data:
+                for key, value in checkpoint.data.items():
+                    if isinstance(value, dict):
+                        formatter.console.print(f"   {key}: {list(value.keys())}")
+                    else:
+                        formatter.console.print(f"   {key}: {value}")
+
+
 @config.command("edit")
 def config_edit() -> None:
     """Open config file in editor."""
