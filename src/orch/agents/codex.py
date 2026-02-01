@@ -65,12 +65,22 @@ class CodexAgent(BaseAgent):
             cmd.extend(["--model", model])
 
         if extra_args:
-            # Note: codex exec doesn't support approval modes or sandbox
-            # Those are only for interactive mode
-
             working_dir = extra_args.get("cwd")
             if working_dir:
                 cmd.extend(["-C", working_dir])
+
+            # Sandbox mode support (codex exec DOES support this!)
+            sandbox = extra_args.get("sandbox")
+            if sandbox:
+                cmd.extend(["--sandbox", sandbox])
+
+            # Full auto mode (safe non-interactive: on-request approval + workspace-write)
+            if extra_args.get("full_auto"):
+                cmd.append("--full-auto")
+
+            # Bypass all approvals (DANGEROUS but fully automated)
+            if extra_args.get("bypass_approvals"):
+                cmd.append("--dangerously-bypass-approvals-and-sandbox")
 
             # Config overrides via -c flag
             config_overrides = extra_args.get("config")
