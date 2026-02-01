@@ -8,6 +8,7 @@ import click
 from orch.agents.registry import AgentRegistry
 from orch.config.manager import ConfigManager
 from orch.output.formatter import get_formatter
+from orch.orchestration.team import TeamOrchestrator
 
 
 class AliasedGroup(click.Group):
@@ -401,6 +402,66 @@ def config_show() -> None:
     import json
     config_dict = config.model_dump(by_alias=True)
     formatter.console.print_json(json.dumps(config_dict, indent=2))
+
+
+
+
+@cli.group()
+def orchestrate() -> None:
+    """Team-of-rivals orchestration commands."""
+    pass
+
+
+@orchestrate.command("run")
+@click.argument("prompt", nargs=-1, required=True)
+@click.option(
+    "--complexity",
+    type=click.Choice(["simple", "standard", "complex"]),
+    help="Task complexity level"
+)
+@click.option("--json", "output_json", is_flag=True, help="Output as JSON")
+def orchestrate_run(prompt: tuple[str, ...], complexity: str | None, output_json: bool) -> None:
+    """Run team-of-rivals orchestration on a task.
+    
+    This uses multiple agents with adversarial review to complete complex tasks
+    with higher quality and reliability than single-agent approaches.
+    """
+    prompt_text = " ".join(prompt)
+    
+    async def _run_orchestration():
+        orchestrator = TeamOrchestrator()
+        
+        options = {}
+        if complexity:
+            options["complexity"] = complexity
+        
+        result = await orchestrator.orchestrate(prompt_text, options)
+        
+        formatter = get_formatter()
+        
+        if output_json:
+            import json
+            formatter.console.print_json(json.dumps({
+                "session_id": result.session_id,
+                "success": result.success,
+                "artifact": result.artifact,
+                "error": result.error
+            }))
+        else:
+            if result.success:
+                formatter.print_success(f"Orchestration completed successfully!")
+                formatter.console.print(f"\nSession ID: {result.session_id}")
+                formatter.console.print(f"\nStatus: {result.artifact.get('status')}")
+                
+                if result.metrics:
+                    formatter.console.print(f"\nMetrics:")
+                    formatter.console.print(f"  Executions: {result.metrics.executions_count}")
+                    formatter.console.print(f"  Critique rounds: {result.metrics.critique_rounds}")
+            else:
+                formatter.print_error(f"Orchestration failed: {result.error}")
+                formatter.console.print(f"\nSession ID: {result.session_id}")
+    
+    asyncio.run(_run_orchestration())
 
 
 @config.command("edit")
