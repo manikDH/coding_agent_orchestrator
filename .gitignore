@@ -43,3 +43,4 @@ htmlcov/
 
 # Local config
 .orch.toml
+.worktrees/
