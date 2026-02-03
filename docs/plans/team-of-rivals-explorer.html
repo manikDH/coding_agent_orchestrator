@@ -1,0 +1,814 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Team-of-Rivals Architecture Explorer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #1a1a1a;
+            color: #e0e0e0;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .container {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        .controls {
+            width: 380px;
+            background: #242424;
+            padding: 24px;
+            overflow-y: auto;
+            border-right: 1px solid #333;
+        }
+
+        .preview {
+            flex: 1;
+            padding: 32px;
+            overflow-y: auto;
+            background: #1e1e1e;
+        }
+
+        .prompt-section {
+            background: #242424;
+            border-top: 1px solid #333;
+            padding: 20px 24px;
+        }
+
+        h1 {
+            font-size: 20px;
+            margin-bottom: 24px;
+            color: #fff;
+            font-weight: 600;
+        }
+
+        h2 {
+            font-size: 14px;
+            margin: 24px 0 12px;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 500;
+        }
+
+        .control-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            font-size: 13px;
+            margin-bottom: 6px;
+            color: #aaa;
+        }
+
+        input[type="text"],
+        textarea,
+        select {
+            width: 100%;
+            background: #1a1a1a;
+            border: 1px solid #333;
+            color: #e0e0e0;
+            padding: 10px;
+            border-radius: 4px;
+            font-size: 13px;
+            font-family: inherit;
+        }
+
+        textarea {
+            resize: vertical;
+            min-height: 60px;
+            font-family: 'Menlo', 'Monaco', monospace;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            height: 4px;
+            background: #333;
+            outline: none;
+            border-radius: 2px;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 16px;
+            height: 16px;
+            background: #4a9eff;
+            cursor: pointer;
+            border-radius: 50%;
+        }
+
+        .range-value {
+            display: inline-block;
+            min-width: 40px;
+            text-align: right;
+            color: #4a9eff;
+            font-weight: 500;
+        }
+
+        .presets {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 24px;
+        }
+
+        .preset-btn {
+            background: #2a2a2a;
+            border: 1px solid #444;
+            color: #e0e0e0;
+            padding: 8px 14px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s;
+        }
+
+        .preset-btn:hover {
+            background: #333;
+            border-color: #555;
+        }
+
+        .flow-diagram {
+            background: #242424;
+            border: 1px solid #333;
+            border-radius: 6px;
+            padding: 32px;
+            margin-bottom: 24px;
+        }
+
+        .flow-node {
+            background: #1a1a1a;
+            border: 2px solid;
+            border-radius: 8px;
+            padding: 16px;
+            margin: 16px 0;
+            transition: all 0.3s;
+        }
+
+        .flow-node.active {
+            transform: scale(1.02);
+            box-shadow: 0 4px 20px rgba(74, 158, 255, 0.3);
+        }
+
+        .flow-node h3 {
+            font-size: 15px;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+
+        .flow-node p {
+            font-size: 13px;
+            color: #999;
+            line-height: 1.5;
+        }
+
+        .flow-arrow {
+            text-align: center;
+            color: #555;
+            font-size: 20px;
+            margin: 8px 0;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-top: 24px;
+        }
+
+        .stat-card {
+            background: #242424;
+            border: 1px solid #333;
+            border-radius: 6px;
+            padding: 16px;
+        }
+
+        .stat-card h4 {
+            font-size: 12px;
+            color: #888;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+        }
+
+        .stat-card .value {
+            font-size: 24px;
+            font-weight: 600;
+            color: #4a9eff;
+        }
+
+        .prompt-output {
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 4px;
+            padding: 16px;
+            margin-bottom: 12px;
+            font-family: 'Menlo', 'Monaco', monospace;
+            font-size: 13px;
+            line-height: 1.6;
+            white-space: pre-wrap;
+            min-height: 120px;
+        }
+
+        .copy-btn {
+            background: #4a9eff;
+            color: #fff;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .copy-btn:hover {
+            background: #3a8eef;
+        }
+
+        .copy-btn:active {
+            transform: scale(0.98);
+        }
+
+        .copy-feedback {
+            display: inline-block;
+            margin-left: 12px;
+            color: #4a9eff;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+
+        .copy-feedback.show {
+            opacity: 1;
+        }
+
+        .complexity-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+            margin-left: 8px;
+        }
+
+        .complexity-simple { background: #2d5016; color: #7ed321; }
+        .complexity-standard { background: #5a3d00; color: #f5a623; }
+        .complexity-complex { background: #4a0e0e; color: #ff6b6b; }
+
+        .phase-list {
+            list-style: none;
+            padding: 0;
+        }
+
+        .phase-list li {
+            padding: 8px 12px;
+            margin: 6px 0;
+            background: #1a1a1a;
+            border-left: 3px solid #333;
+            border-radius: 2px;
+            font-size: 13px;
+        }
+
+        .phase-list li.active {
+            border-left-color: #4a9eff;
+            background: #1e2a3a;
+        }
+
+        .critic-grid {
+            display: grid;
+            gap: 12px;
+            margin-top: 16px;
+        }
+
+        .critic-card {
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 6px;
+            padding: 14px;
+        }
+
+        .critic-card.enabled {
+            border-color: #4a9eff;
+        }
+
+        .critic-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .critic-name {
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .veto-badge {
+            font-size: 10px;
+            padding: 3px 8px;
+            border-radius: 10px;
+            background: #2a2a2a;
+            color: #aaa;
+        }
+
+        .veto-absolute { background: #4a0e0e; color: #ff6b6b; }
+        .veto-strong { background: #5a3d00; color: #f5a623; }
+        .veto-weak { background: #3a4a2a; color: #a8d46f; }
+        .veto-none { background: #2a2a3a; color: #8899aa; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="controls">
+            <h1>Team-of-Rivals Explorer</h1>
+
+            <div class="presets">
+                <button class="preset-btn" onclick="loadPreset('simple')">Simple Bug Fix</button>
+                <button class="preset-btn" onclick="loadPreset('feature')">New Feature</button>
+                <button class="preset-btn" onclick="loadPreset('refactor')">Major Refactor</button>
+                <button class="preset-btn" onclick="loadPreset('security')">Auth System</button>
+            </div>
+
+            <h2>Task Configuration</h2>
+
+            <div class="control-group">
+                <label>Task Prompt</label>
+                <textarea id="taskPrompt" rows="3">implement user authentication</textarea>
+            </div>
+
+            <div class="control-group">
+                <label>Complexity Detection</label>
+                <select id="complexityMode">
+                    <option value="auto" selected>Auto-detect</option>
+                    <option value="simple">Force Simple</option>
+                    <option value="standard">Force Standard</option>
+                    <option value="complex">Force Complex</option>
+                </select>
+            </div>
+
+            <h2>Orchestration Settings</h2>
+
+            <div class="control-group">
+                <label>Max Iterations <span class="range-value" id="maxIterVal">5</span></label>
+                <input type="range" id="maxIterations" min="1" max="10" value="5">
+            </div>
+
+            <div class="control-group">
+                <label>Files Affected <span class="range-value" id="filesVal">3</span></label>
+                <input type="range" id="filesAffected" min="1" max="20" value="3">
+            </div>
+
+            <h2>Active Critics</h2>
+
+            <div class="control-group">
+                <label><input type="checkbox" id="criticSecurity" checked> Security Critic (Absolute veto)</label>
+            </div>
+            <div class="control-group">
+                <label><input type="checkbox" id="criticCorrectness" checked> Correctness Critic (Strong veto)</label>
+            </div>
+            <div class="control-group">
+                <label><input type="checkbox" id="criticPerformance"> Performance Critic (Weak veto)</label>
+            </div>
+            <div class="control-group">
+                <label><input type="checkbox" id="criticStyle"> Style Critic (Suggestions only)</label>
+            </div>
+
+            <h2>Execution Preferences</h2>
+
+            <div class="control-group">
+                <label>Preferred Agent for Implementation</label>
+                <select id="preferredAgent">
+                    <option value="auto">Auto-select</option>
+                    <option value="codex" selected>Codex</option>
+                    <option value="opencode">OpenCode</option>
+                    <option value="gemini">Gemini</option>
+                </select>
+            </div>
+
+            <div class="control-group">
+                <label>Enable Checkpointing</label>
+                <select id="checkpointing">
+                    <option value="true" selected>Enabled</option>
+                    <option value="false">Disabled</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="preview">
+            <div class="flow-diagram" id="flowDiagram"></div>
+
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <h4>Detected Complexity</h4>
+                    <div class="value" id="complexityLevel">Standard</div>
+                </div>
+                <div class="stat-card">
+                    <h4>Estimated Phases</h4>
+                    <div class="value" id="phaseCount">3</div>
+                </div>
+                <div class="stat-card">
+                    <h4>Active Critics</h4>
+                    <div class="value" id="criticCount">2</div>
+                </div>
+                <div class="stat-card">
+                    <h4>Execution Mode</h4>
+                    <div class="value" id="executionMode">Hybrid</div>
+                </div>
+            </div>
+
+            <h2 style="margin-top: 32px; color: #888;">Workflow Phases</h2>
+            <ul class="phase-list" id="phaseList"></ul>
+
+            <h2 style="margin-top: 32px; color: #888;">Critic Configuration</h2>
+            <div class="critic-grid" id="criticGrid"></div>
+        </div>
+    </div>
+
+    <div class="prompt-section">
+        <div class="prompt-output" id="promptOutput"></div>
+        <button class="copy-btn" onclick="copyPrompt()">Copy Command</button>
+        <span class="copy-feedback" id="copyFeedback">Copied!</span>
+    </div>
+
+    <script>
+        const DEFAULTS = {
+            taskPrompt: "implement user authentication",
+            complexityMode: "auto",
+            maxIterations: 5,
+            filesAffected: 3,
+            criticSecurity: true,
+            criticCorrectness: true,
+            criticPerformance: false,
+            criticStyle: false,
+            preferredAgent: "codex",
+            checkpointing: "true"
+        };
+
+        const state = { ...DEFAULTS };
+
+        const PRESETS = {
+            simple: {
+                taskPrompt: "fix typo in README",
+                complexityMode: "simple",
+                filesAffected: 1,
+                criticSecurity: false,
+                criticCorrectness: true,
+                criticPerformance: false,
+                criticStyle: false
+            },
+            feature: {
+                taskPrompt: "add user profile page with avatar upload",
+                complexityMode: "standard",
+                filesAffected: 5,
+                criticSecurity: true,
+                criticCorrectness: true,
+                criticPerformance: true,
+                criticStyle: false
+            },
+            refactor: {
+                taskPrompt: "refactor database layer to use async/await",
+                complexityMode: "complex",
+                filesAffected: 12,
+                criticSecurity: false,
+                criticCorrectness: true,
+                criticPerformance: true,
+                criticStyle: true
+            },
+            security: {
+                taskPrompt: "implement JWT authentication with refresh tokens",
+                complexityMode: "complex",
+                filesAffected: 8,
+                criticSecurity: true,
+                criticCorrectness: true,
+                criticPerformance: true,
+                criticStyle: false
+            }
+        };
+
+        function loadPreset(name) {
+            const preset = PRESETS[name];
+            Object.assign(state, preset);
+            syncControlsFromState();
+            updateAll();
+        }
+
+        function syncControlsFromState() {
+            document.getElementById('taskPrompt').value = state.taskPrompt;
+            document.getElementById('complexityMode').value = state.complexityMode;
+            document.getElementById('maxIterations').value = state.maxIterations;
+            document.getElementById('filesAffected').value = state.filesAffected;
+            document.getElementById('criticSecurity').checked = state.criticSecurity;
+            document.getElementById('criticCorrectness').checked = state.criticCorrectness;
+            document.getElementById('criticPerformance').checked = state.criticPerformance;
+            document.getElementById('criticStyle').checked = state.criticStyle;
+            document.getElementById('preferredAgent').value = state.preferredAgent;
+            document.getElementById('checkpointing').value = state.checkpointing;
+        }
+
+        function detectComplexity() {
+            if (state.complexityMode !== 'auto') {
+                return state.complexityMode;
+            }
+
+            const prompt = state.taskPrompt.toLowerCase();
+            const securityKeywords = ['auth', 'crypto', 'token', 'password', 'security'];
+            const architecturalKeywords = ['design', 'refactor', 'migrate', 'scale', 'implement system'];
+            const simpleKeywords = ['typo', 'fix', 'update', 'change'];
+
+            const hasSecurityKeyword = securityKeywords.some(k => prompt.includes(k));
+            const hasArchitecturalKeyword = architecturalKeywords.some(k => prompt.includes(k));
+            const hasSimpleKeyword = simpleKeywords.some(k => prompt.includes(k));
+
+            if (hasSimpleKeyword && state.filesAffected <= 1) return 'simple';
+            if (hasSecurityKeyword || hasArchitecturalKeyword || state.filesAffected > 5) return 'complex';
+            return 'standard';
+        }
+
+        function renderFlowDiagram() {
+            const complexity = detectComplexity();
+            const activeCritics = getActiveCritics();
+
+            let html = '';
+
+            // User Request
+            html += `
+                <div class="flow-node active" style="border-color: #4a9eff;">
+                    <h3>📝 User Request</h3>
+                    <p>${state.taskPrompt}</p>
+                </div>
+                <div class="flow-arrow">↓</div>
+            `;
+
+            // Complexity Analyzer
+            const complexityClass = `complexity-${complexity}`;
+            html += `
+                <div class="flow-node ${complexity !== 'simple' ? 'active' : ''}" style="border-color: ${complexity === 'simple' ? '#555' : '#7ed321'};">
+                    <h3>🔍 Complexity Analyzer <span class="complexity-badge ${complexityClass}">${complexity.toUpperCase()}</span></h3>
+                    <p>Files: ${state.filesAffected} | Auto-detect: ${state.complexityMode === 'auto' ? 'Yes' : 'No'}</p>
+                </div>
+                <div class="flow-arrow">↓</div>
+            `;
+
+            if (complexity === 'simple') {
+                // Simple path - direct to router
+                html += `
+                    <div class="flow-node" style="border-color: #7ed321;">
+                        <h3>🎯 Router (Simple Mode)</h3>
+                        <p>Direct delegation to single agent</p>
+                    </div>
+                `;
+            } else {
+                // Complex path - full orchestration
+                html += `
+                    <div class="flow-node active" style="border-color: #f5a623;">
+                        <h3>🎭 Team Orchestrator</h3>
+                        <p>Max ${state.maxIterations} iterations | Checkpoints: ${state.checkpointing === 'true' ? 'On' : 'Off'}</p>
+                    </div>
+                    <div class="flow-arrow">↓</div>
+                    <div class="flow-node active" style="border-color: #9b59b6;">
+                        <h3>📋 Planner Agent</h3>
+                        <p>Creates structured implementation plan</p>
+                    </div>
+                    <div class="flow-arrow">↓</div>
+                    <div class="flow-node active" style="border-color: #3498db;">
+                        <h3>⚙️ Executor Agents</h3>
+                        <p>Hybrid: Subprocess (tests) + AI CLI (${state.preferredAgent})</p>
+                    </div>
+                    <div class="flow-arrow">↓</div>
+                    <div class="flow-node ${activeCritics.length > 0 ? 'active' : ''}" style="border-color: ${activeCritics.length > 0 ? '#e74c3c' : '#555'};">
+                        <h3>👥 Critics (${activeCritics.length} active)</h3>
+                        <p>${activeCritics.map(c => c.name).join(', ') || 'None enabled'}</p>
+                    </div>
+                    <div class="flow-arrow">↓</div>
+                    <div class="flow-node" style="border-color: #16a085;">
+                        <h3>✅ Aggregator</h3>
+                        <p>Veto hierarchy + weighted scoring</p>
+                    </div>
+                `;
+            }
+
+            html += `
+                <div class="flow-arrow">↓</div>
+                <div class="flow-node" style="border-color: #4a9eff;">
+                    <h3>🎉 Final Artifact</h3>
+                    <p>Code + Trace + Analytics</p>
+                </div>
+            `;
+
+            document.getElementById('flowDiagram').innerHTML = html;
+        }
+
+        function getActiveCritics() {
+            const critics = [];
+            if (state.criticSecurity) critics.push({ name: 'Security', veto: 'absolute', color: '#ff6b6b' });
+            if (state.criticCorrectness) critics.push({ name: 'Correctness', veto: 'strong', color: '#f5a623' });
+            if (state.criticPerformance) critics.push({ name: 'Performance', veto: 'weak', color: '#a8d46f' });
+            if (state.criticStyle) critics.push({ name: 'Style', veto: 'none', color: '#8899aa' });
+            return critics;
+        }
+
+        function renderPhases() {
+            const complexity = detectComplexity();
+            const phases = [];
+
+            if (complexity === 'simple') {
+                phases.push('Direct routing to agent');
+                phases.push('Single-pass execution');
+                phases.push('Return result');
+            } else {
+                phases.push('Planning phase');
+                phases.push(`Execution loop (up to ${state.maxIterations} iterations)`);
+                phases.push('Critic review');
+                phases.push('Aggregation & decision');
+                if (state.checkpointing === 'true') {
+                    phases.push('Checkpoint saved');
+                }
+                phases.push('Finalization');
+            }
+
+            const html = phases.map((phase, i) =>
+                `<li ${i < 2 ? 'class="active"' : ''}>${phase}</li>`
+            ).join('');
+
+            document.getElementById('phaseList').innerHTML = html;
+        }
+
+        function renderCritics() {
+            const critics = [
+                { id: 'security', name: 'Security Critic', veto: 'absolute', enabled: state.criticSecurity, focus: 'Auth, crypto, injection, secrets' },
+                { id: 'correctness', name: 'Correctness Critic', veto: 'strong', enabled: state.criticCorrectness, focus: 'Logic errors, test failures, edge cases' },
+                { id: 'performance', name: 'Performance Critic', veto: 'weak', enabled: state.criticPerformance, focus: 'Algorithmic efficiency, scalability' },
+                { id: 'style', name: 'Style Critic', veto: 'none', enabled: state.criticStyle, focus: 'Code quality, maintainability, patterns' }
+            ];
+
+            const html = critics.map(c => `
+                <div class="critic-card ${c.enabled ? 'enabled' : ''}">
+                    <div class="critic-header">
+                        <div class="critic-name">${c.name}</div>
+                        <div class="veto-badge veto-${c.veto}">${c.veto.toUpperCase()}</div>
+                    </div>
+                    <p style="font-size: 12px; color: #999;">${c.focus}</p>
+                </div>
+            `).join('');
+
+            document.getElementById('criticGrid').innerHTML = html;
+        }
+
+        function updateStats() {
+            const complexity = detectComplexity();
+            const activeCritics = getActiveCritics();
+            const phases = complexity === 'simple' ? 1 : 4;
+
+            document.getElementById('complexityLevel').textContent = complexity.charAt(0).toUpperCase() + complexity.slice(1);
+            document.getElementById('phaseCount').textContent = phases;
+            document.getElementById('criticCount').textContent = activeCritics.length;
+            document.getElementById('executionMode').textContent = complexity === 'simple' ? 'Direct' : 'Hybrid';
+        }
+
+        function updatePrompt() {
+            const complexity = detectComplexity();
+            const activeCritics = getActiveCritics();
+
+            let prompt = `orch orchestrate run "${state.taskPrompt}"`;
+
+            const options = [];
+
+            if (state.complexityMode !== 'auto') {
+                options.push(`--mode ${state.complexityMode}`);
+            }
+
+            if (state.maxIterations !== DEFAULTS.maxIterations) {
+                options.push(`--max-iterations ${state.maxIterations}`);
+            }
+
+            if (state.preferredAgent !== 'auto') {
+                options.push(`--preferred-agent ${state.preferredAgent}`);
+            }
+
+            if (state.checkpointing === 'false') {
+                options.push(`--no-checkpoint`);
+            }
+
+            const disabledCritics = [];
+            if (!state.criticSecurity) disabledCritics.push('security');
+            if (!state.criticCorrectness) disabledCritics.push('correctness');
+            if (disabledCritics.length > 0) {
+                options.push(`--disable-critics ${disabledCritics.join(',')}`);
+            }
+
+            if (options.length > 0) {
+                prompt += ' ' + options.join(' ');
+            }
+
+            let explanation = `\n\n# What this does:\n`;
+            explanation += `- Complexity detected: ${complexity}\n`;
+
+            if (complexity === 'simple') {
+                explanation += `- Routes directly to ${state.preferredAgent} agent\n`;
+                explanation += `- No orchestration overhead\n`;
+            } else {
+                explanation += `- Full team orchestration with ${activeCritics.length} critic(s)\n`;
+                explanation += `- Planning → Execution → Review cycle\n`;
+                explanation += `- Up to ${state.maxIterations} refinement iterations\n`;
+                if (state.checkpointing === 'true') {
+                    explanation += `- Session checkpointed for recovery\n`;
+                }
+            }
+
+            if (activeCritics.length > 0) {
+                explanation += `\n# Active critics:\n`;
+                activeCritics.forEach(c => {
+                    explanation += `- ${c.name}: ${c.veto} veto power\n`;
+                });
+            }
+
+            document.getElementById('promptOutput').textContent = prompt + explanation;
+        }
+
+        function updateAll() {
+            renderFlowDiagram();
+            renderPhases();
+            renderCritics();
+            updateStats();
+            updatePrompt();
+        }
+
+        function copyPrompt() {
+            const text = document.getElementById('promptOutput').textContent.split('\n\n#')[0];
+            navigator.clipboard.writeText(text);
+
+            const feedback = document.getElementById('copyFeedback');
+            feedback.classList.add('show');
+            setTimeout(() => feedback.classList.remove('show'), 2000);
+        }
+
+        // Event listeners
+        document.getElementById('taskPrompt').addEventListener('input', (e) => {
+            state.taskPrompt = e.target.value;
+            updateAll();
+        });
+
+        document.getElementById('complexityMode').addEventListener('change', (e) => {
+            state.complexityMode = e.target.value;
+            updateAll();
+        });
+
+        document.getElementById('maxIterations').addEventListener('input', (e) => {
+            state.maxIterations = parseInt(e.target.value);
+            document.getElementById('maxIterVal').textContent = state.maxIterations;
+            updateAll();
+        });
+
+        document.getElementById('filesAffected').addEventListener('input', (e) => {
+            state.filesAffected = parseInt(e.target.value);
+            document.getElementById('filesVal').textContent = state.filesAffected;
+            updateAll();
+        });
+
+        document.getElementById('criticSecurity').addEventListener('change', (e) => {
+            state.criticSecurity = e.target.checked;
+            updateAll();
+        });
+
+        document.getElementById('criticCorrectness').addEventListener('change', (e) => {
+            state.criticCorrectness = e.target.checked;
+            updateAll();
+        });
+
+        document.getElementById('criticPerformance').addEventListener('change', (e) => {
+            state.criticPerformance = e.target.checked;
+            updateAll();
+        });
+
+        document.getElementById('criticStyle').addEventListener('change', (e) => {
+            state.criticStyle = e.target.checked;
+            updateAll();
+        });
+
+        document.getElementById('preferredAgent').addEventListener('change', (e) => {
+            state.preferredAgent = e.target.value;
+            updateAll();
+        });
+
+        document.getElementById('checkpointing').addEventListener('change', (e) => {
+            state.checkpointing = e.target.value;
+            updateAll();
+        });
+
+        // Initial render
+        updateAll();
+    </script>
+</body>
+</html>
