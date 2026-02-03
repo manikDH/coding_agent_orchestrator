@@ -169,3 +169,11 @@ def get_plugins_dir() -> Path:
     plugins_dir = get_config_dir() / "plugins"
     plugins_dir.mkdir(parents=True, exist_ok=True)
     return plugins_dir
+
+
+
+def get_analytics_dir() -> Path:
+    """Get the analytics directory path."""
+    analytics_dir = get_config_dir() / "analytics"
+    analytics_dir.mkdir(parents=True, exist_ok=True)
+    return analytics_dir
