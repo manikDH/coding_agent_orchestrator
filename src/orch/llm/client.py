@@ -1,5 +1,6 @@
 """LLM client for complexity detection."""
 
+import importlib.util
 import logging
 import os
 from abc import ABC, abstractmethod
@@ -129,11 +130,7 @@ class LLMClientFactory:
     }
 
     @classmethod
-    def create(
-        cls,
-        config,
-        preferred_provider: str | None = None
-    ) -> LLMClient | None:
+    def create(cls, config, preferred_provider: str | None = None) -> LLMClient | None:
         """
         Create an LLM client based on config and available API keys.
 
@@ -162,8 +159,12 @@ class LLMClientFactory:
             logger.warning(f"No API key found for {provider} (set {env_var})")
             return None
 
-        logger.info(f"Using {provider} LLM client for complexity detection")
-        return client_class(api_key)
+        try:
+            logger.info(f"Using {provider} LLM client for complexity detection")
+            return client_class(api_key)
+        except ImportError as e:
+            logger.warning(f"SDK for {provider} not installed: {e}")
+            return None
 
     @classmethod
     def _infer_provider(cls, model: str) -> str | None:
@@ -174,10 +175,19 @@ class LLMClientFactory:
         return None
 
     @classmethod
+    def _is_sdk_available(cls, provider: str) -> bool:
+        """Check if SDK for provider is importable."""
+        if provider == "anthropic":
+            return importlib.util.find_spec("anthropic") is not None
+        elif provider == "openai":
+            return importlib.util.find_spec("openai") is not None
+        return False
+
+    @classmethod
     def _find_available_provider(cls) -> str | None:
-        """Find first provider with available API key."""
+        """Find first provider with available API key and SDK."""
         for provider, (env_var, _, _) in cls.PROVIDERS.items():
-            if os.getenv(env_var):
+            if os.getenv(env_var) and cls._is_sdk_available(provider):
                 return provider
         return None
 

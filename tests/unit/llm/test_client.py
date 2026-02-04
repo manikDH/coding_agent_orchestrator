@@ -120,18 +120,51 @@ def test_factory_creates_anthropic_client():
     mock_config.orchestration.detection_model = "claude-3-haiku-20240307"
 
     with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}):
-        with patch('orch.llm.client.anthropic'):
+        with patch("orch.llm.client.anthropic"):
             client = LLMClientFactory.create(mock_config)
 
     assert isinstance(client, AnthropicLLMClient)
 
 
 def test_factory_is_available():
-    """Test is_available returns True with API key."""
+    """Test is_available returns True with API key and SDK."""
     from orch.llm.client import LLMClientFactory
 
     with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "key"}):
-        assert LLMClientFactory.is_available() is True
+        with patch.object(LLMClientFactory, "_is_sdk_available", return_value=True):
+            assert LLMClientFactory.is_available() is True
 
     with patch.dict(os.environ, {}, clear=True):
         assert LLMClientFactory.is_available() is False
+
+
+def test_factory_handles_missing_sdk():
+    """Test factory handles ImportError when SDK is missing."""
+    from orch.llm.client import LLMClientFactory
+
+    mock_config = Mock()
+    mock_config.orchestration.detection_model = "claude-3-haiku-20240307"
+
+    # Simulate SDK installed but API key available
+    with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}):
+        # Patch anthropic to be None to simulate missing SDK
+        with patch("orch.llm.client.anthropic", None):
+            client = LLMClientFactory.create(mock_config)
+
+    # Should return None gracefully instead of raising ImportError
+    assert client is None
+
+
+def test_is_available_checks_sdk():
+    """Test is_available returns False when SDK is missing even with API key."""
+    from orch.llm.client import LLMClientFactory
+
+    # API key exists but SDK is missing
+    with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}):
+        with patch("orch.llm.client.anthropic", None):
+            assert LLMClientFactory.is_available() is False
+
+    # SDK exists but no API key
+    with patch.dict(os.environ, {}, clear=True):
+        with patch("orch.llm.client.anthropic"):
+            assert LLMClientFactory.is_available() is False
