@@ -1,5 +1,6 @@
 """Complexity analysis for automatic task classification."""
 
+import asyncio
 import json
 import logging
 from dataclasses import dataclass, field
@@ -292,3 +293,110 @@ INSTRUCTIONS (follow exactly):
             detection["reasoning"] = "No reasoning provided"
 
         return detection
+
+    async def analyze(
+        self,
+        user_prompt: str,
+        workspace_context = None
+    ) -> ComplexityResult:
+        """
+        Analyzes task complexity using LLM with robust error handling.
+        """
+        # Check if auto_detect is disabled in config
+        if not self.config.orchestration.auto_detect:
+            return self._create_fallback_result(
+                source=DetectionSource.CONFIG_DEFAULT,
+                reason="Auto-detection disabled in config"
+            )
+
+        # Check if LLM client is available
+        if self.llm_client is None:
+            logger.warning("No LLM client available, using config default complexity")
+            return self._create_fallback_result(
+                source=DetectionSource.ERROR_FALLBACK,
+                reason="No LLM client configured (missing API key?)"
+            )
+
+        # Build context
+        context = self._build_context(workspace_context)
+
+        # Try LLM detection with retries
+        detection = None
+        last_error = None
+
+        for attempt in range(self.MAX_RETRIES + 1):
+            try:
+                detection = await self._call_llm_with_validation(user_prompt, context)
+                break
+            except LLMResponseError as e:
+                last_error = e
+                logger.warning(f"LLM detection attempt {attempt + 1} failed: {e}")
+                if attempt < self.MAX_RETRIES:
+                    await asyncio.sleep(self.RETRY_DELAY_MS / 1000)
+            except Exception as e:
+                last_error = e
+                logger.error(f"Unexpected error in complexity detection: {e}")
+                break
+
+        # Handle detection failure
+        if detection is None:
+            logger.warning(f"All LLM detection attempts failed: {last_error}")
+            return self._create_fallback_result(
+                source=DetectionSource.ERROR_FALLBACK,
+                reason=f"LLM detection failed: {last_error}"
+            )
+
+        # Check confidence threshold
+        if detection["confidence"] < self._confidence_threshold:
+            logger.info(
+                f"Low confidence ({detection['confidence']:.2f} < {self._confidence_threshold}), "
+                "using conservative fallback"
+            )
+            reason = (
+                f"Confidence {detection['confidence']:.2f} "
+                f"below threshold {self._confidence_threshold}"
+            )
+            return self._create_fallback_result(
+                source=DetectionSource.LOW_CONFIDENCE_FALLBACK,
+                reason=reason,
+                detected_level=detection.get("complexity_level"),
+                detected_types=detection.get("task_types", [])
+            )
+
+        # Map to model recommendations
+        recommended_models = self._get_model_recommendations(
+            detection["complexity_level"],
+            detection["task_types"]
+        )
+
+        return ComplexityResult(
+            complexity_level=detection["complexity_level"],
+            task_types=detection["task_types"],
+            reasoning=detection["reasoning"],
+            confidence=detection["confidence"],
+            recommended_models=recommended_models,
+            source=DetectionSource.LLM_DETECTED
+        )
+
+    async def _call_llm_with_validation(
+        self,
+        user_prompt: str,
+        context: dict
+    ) -> dict:
+        """
+        Call LLM and validate response with JSON schema enforcement.
+        """
+        prompt = self._build_detection_prompt(user_prompt, context)
+
+        try:
+            response = await self.llm_client.complete(
+                prompt=prompt,
+                model=self.config.orchestration.detection_model,
+                max_tokens=500,
+                temperature=0.0,
+                system="You are a task complexity analyzer. Return ONLY valid JSON, no markdown."
+            )
+        except Exception as e:
+            raise LLMResponseError(f"LLM API call failed: {e}") from e
+
+        return self._validate_response(response.content)

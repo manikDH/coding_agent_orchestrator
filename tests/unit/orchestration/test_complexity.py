@@ -1,6 +1,6 @@
 """Tests for ComplexityAnalyzer."""
 
-from unittest.mock import Mock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 
@@ -327,3 +327,115 @@ def test_build_detection_prompt():
     assert "=== TASK END ===" in prompt
     assert "implement auth" in prompt
     assert "complexity_level" in prompt
+
+
+@pytest.mark.asyncio
+async def test_analyze_auto_detect_disabled():
+    """Test analyze returns config default when auto_detect disabled."""
+    from orch.orchestration.complexity import ComplexityAnalyzer, DetectionSource
+
+    mock_config = Mock()
+    mock_config.orchestration.auto_detect = False
+    mock_config.orchestration.default_complexity = "standard"
+    mock_config.orchestration.complexity.confidence_threshold = 0.7
+
+    analyzer = ComplexityAnalyzer(None, mock_config)
+    result = await analyzer.analyze("any task", None)
+
+    assert result.source == DetectionSource.CONFIG_DEFAULT
+    assert result.complexity_level == "standard"
+
+
+@pytest.mark.asyncio
+async def test_analyze_no_llm_client():
+    """Test analyze falls back when no LLM client."""
+    from orch.orchestration.complexity import ComplexityAnalyzer, DetectionSource
+
+    mock_config = Mock()
+    mock_config.orchestration.auto_detect = True
+    mock_config.orchestration.default_complexity = "standard"
+    mock_config.orchestration.complexity.confidence_threshold = 0.7
+
+    analyzer = ComplexityAnalyzer(None, mock_config)
+    result = await analyzer.analyze("any task", None)
+
+    assert result.source == DetectionSource.ERROR_FALLBACK
+    assert "No LLM client" in result.reasoning
+
+
+@pytest.mark.asyncio
+async def test_analyze_successful_detection():
+    """Test successful LLM detection."""
+    from orch.llm.client import LLMResponse
+    from orch.orchestration.complexity import ComplexityAnalyzer, DetectionSource
+
+    mock_llm = AsyncMock()
+    response_content = (
+        '{"complexity_level": "complex", "task_types": ["security_sensitive"], '
+        '"reasoning": "Auth task", "confidence": 0.92}'
+    )
+    mock_llm.complete.return_value = LLMResponse(
+        content=response_content, model="claude-3-haiku", tokens_used=50
+    )
+
+    mock_config = Mock()
+    mock_config.orchestration.auto_detect = True
+    mock_config.orchestration.default_complexity = "standard"
+    mock_config.orchestration.detection_model = "claude-3-haiku"
+    mock_config.orchestration.complexity.confidence_threshold = 0.7
+
+    analyzer = ComplexityAnalyzer(mock_llm, mock_config)
+    result = await analyzer.analyze("refactor auth", None)
+
+    assert result.source == DetectionSource.LLM_DETECTED
+    assert result.complexity_level == "complex"
+    assert result.confidence == 0.92
+
+
+@pytest.mark.asyncio
+async def test_analyze_low_confidence_fallback():
+    """Test low confidence triggers fallback."""
+    from orch.llm.client import LLMResponse
+    from orch.orchestration.complexity import ComplexityAnalyzer, DetectionSource
+
+    mock_llm = AsyncMock()
+    response_content = (
+        '{"complexity_level": "simple", "task_types": [], '
+        '"reasoning": "unclear", "confidence": 0.4}'
+    )
+    mock_llm.complete.return_value = LLMResponse(
+        content=response_content, model="claude-3-haiku", tokens_used=50
+    )
+
+    mock_config = Mock()
+    mock_config.orchestration.auto_detect = True
+    mock_config.orchestration.default_complexity = "standard"
+    mock_config.orchestration.detection_model = "claude-3-haiku"
+    mock_config.orchestration.complexity.confidence_threshold = 0.7
+
+    analyzer = ComplexityAnalyzer(mock_llm, mock_config)
+    result = await analyzer.analyze("ambiguous task", None)
+
+    assert result.source == DetectionSource.LOW_CONFIDENCE_FALLBACK
+
+
+@pytest.mark.asyncio
+async def test_analyze_llm_error_retries():
+    """Test LLM errors trigger retries then fallback."""
+    from orch.orchestration.complexity import ComplexityAnalyzer, DetectionSource
+
+    mock_llm = AsyncMock()
+    mock_llm.complete.side_effect = Exception("API timeout")
+
+    mock_config = Mock()
+    mock_config.orchestration.auto_detect = True
+    mock_config.orchestration.default_complexity = "standard"
+    mock_config.orchestration.detection_model = "claude-3-haiku"
+    mock_config.orchestration.complexity.confidence_threshold = 0.7
+
+    analyzer = ComplexityAnalyzer(mock_llm, mock_config)
+    result = await analyzer.analyze("some task", None)
+
+    # Should have retried
+    assert mock_llm.complete.call_count == 3  # 1 + MAX_RETRIES
+    assert result.source == DetectionSource.ERROR_FALLBACK
