@@ -1,4 +1,5 @@
 """LLM client for complexity detection."""
+
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -19,6 +20,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class LLMResponse:
     """Response from LLM."""
+
     content: str
     model: str
     tokens_used: int
@@ -34,7 +36,7 @@ class LLMClient(ABC):
         model: str,
         max_tokens: int = 500,
         temperature: float = 0.0,
-        system: str | None = None
+        system: str | None = None,
     ) -> LLMResponse:
         """Send prompt to LLM and get response."""
         pass
@@ -55,14 +57,14 @@ class AnthropicLLMClient(LLMClient):
         model: str,
         max_tokens: int = 500,
         temperature: float = 0.0,
-        system: str | None = None
+        system: str | None = None,
     ) -> LLMResponse:
         """Call Anthropic API."""
         kwargs = {
             "model": model,
             "max_tokens": max_tokens,
             "temperature": temperature,
-            "messages": [{"role": "user", "content": prompt}]
+            "messages": [{"role": "user", "content": prompt}],
         }
         if system:
             kwargs["system"] = system
@@ -72,7 +74,7 @@ class AnthropicLLMClient(LLMClient):
         return LLMResponse(
             content=response.content[0].text,
             model=model,
-            tokens_used=response.usage.input_tokens + response.usage.output_tokens
+            tokens_used=response.usage.input_tokens + response.usage.output_tokens,
         )
 
 
@@ -91,7 +93,7 @@ class OpenAILLMClient(LLMClient):
         model: str,
         max_tokens: int = 500,
         temperature: float = 0.0,
-        system: str | None = None
+        system: str | None = None,
     ) -> LLMResponse:
         """Call OpenAI API."""
         messages = []
@@ -100,14 +102,11 @@ class OpenAILLMClient(LLMClient):
         messages.append({"role": "user", "content": prompt})
 
         response = await self.client.chat.completions.create(
-            model=model,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            messages=messages
+            model=model, max_tokens=max_tokens, temperature=temperature, messages=messages
         )
 
         return LLMResponse(
             content=response.choices[0].message.content,
             model=model,
-            tokens_used=response.usage.total_tokens if response.usage else 0
+            tokens_used=response.usage.total_tokens if response.usage else 0,
         )

@@ -1,4 +1,5 @@
 """Tests for LLM client."""
+
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
@@ -8,11 +9,7 @@ from orch.llm.client import LLMResponse
 
 def test_llm_response_creation():
     """Test LLMResponse dataclass creation."""
-    response = LLMResponse(
-        content="test content",
-        model="claude-3-haiku-20240307",
-        tokens_used=50
-    )
+    response = LLMResponse(content="test content", model="claude-3-haiku-20240307", tokens_used=50)
 
     assert response.content == "test content"
     assert response.model == "claude-3-haiku-20240307"
@@ -22,7 +19,7 @@ def test_llm_response_creation():
 @pytest.mark.asyncio
 async def test_openai_client_complete():
     """Test OpenAILLMClient.complete() call."""
-    with patch('orch.llm.client.openai') as mock_openai:
+    with patch("orch.llm.client.openai") as mock_openai:
         # Setup mock response
         mock_choice = Mock()
         mock_choice.message.content = "openai response"
@@ -35,13 +32,11 @@ async def test_openai_client_complete():
         mock_openai.AsyncOpenAI.return_value = mock_client
 
         from orch.llm.client import OpenAILLMClient
+
         client = OpenAILLMClient("test-key")
 
         result = await client.complete(
-            prompt="test prompt",
-            model="gpt-4o-mini",
-            max_tokens=100,
-            system="You are helpful"
+            prompt="test prompt", model="gpt-4o-mini", max_tokens=100, system="You are helpful"
         )
 
         assert result.content == "openai response"
@@ -50,7 +45,7 @@ async def test_openai_client_complete():
 
 def test_anthropic_client_creation():
     """Test AnthropicLLMClient initialization."""
-    with patch('orch.llm.client.anthropic') as mock_anthropic:
+    with patch("orch.llm.client.anthropic") as mock_anthropic:
         mock_client = Mock()
         mock_anthropic.AsyncAnthropic.return_value = mock_client
 
@@ -64,7 +59,7 @@ def test_anthropic_client_creation():
 @pytest.mark.asyncio
 async def test_anthropic_client_complete():
     """Test AnthropicLLMClient.complete() call."""
-    with patch('orch.llm.client.anthropic') as mock_anthropic:
+    with patch("orch.llm.client.anthropic") as mock_anthropic:
         # Setup mock response
         mock_response = Mock()
         mock_response.content = [Mock(text="response text")]
@@ -76,13 +71,11 @@ async def test_anthropic_client_complete():
         mock_anthropic.AsyncAnthropic.return_value = mock_client
 
         from orch.llm.client import AnthropicLLMClient
+
         client = AnthropicLLMClient("test-key")
 
         result = await client.complete(
-            prompt="test prompt",
-            model="claude-3-haiku-20240307",
-            max_tokens=100,
-            temperature=0.0
+            prompt="test prompt", model="claude-3-haiku-20240307", max_tokens=100, temperature=0.0
         )
 
         assert result.content == "response text"
