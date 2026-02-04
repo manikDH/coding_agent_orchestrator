@@ -1,4 +1,5 @@
 """Tests for TeamOrchestrator"""
+
 from unittest.mock import patch
 
 import pytest
@@ -46,7 +47,7 @@ async def test_orchestrate_with_complexity_detection():
     """Test orchestration includes complexity detection."""
     from orch.orchestration.team import TeamOrchestrator
 
-    with patch('orch.orchestration.team.LLMClientFactory') as mock_factory:
+    with patch("orch.orchestration.team.LLMClientFactory") as mock_factory:
         mock_factory.create.return_value = None  # No LLM client
 
         orchestrator = TeamOrchestrator()
@@ -62,9 +63,18 @@ async def test_orchestrate_with_manual_complexity():
     from orch.orchestration.team import TeamOrchestrator
 
     orchestrator = TeamOrchestrator()
-    result = await orchestrator.orchestrate(
-        "test task",
-        {"complexity": "complex"}
-    )
+    result = await orchestrator.orchestrate("test task", {"complexity": "complex"})
 
+    assert result.success
+
+
+@pytest.mark.asyncio
+async def test_orchestrate_validates_invalid_complexity():
+    """Test invalid complexity is handled gracefully."""
+    from orch.orchestration.team import TeamOrchestrator
+
+    orchestrator = TeamOrchestrator()
+    result = await orchestrator.orchestrate("test task", {"complexity": "invalid_value"})
+
+    # Should succeed with fallback to standard
     assert result.success
