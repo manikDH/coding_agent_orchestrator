@@ -1,11 +1,15 @@
 """Team-of-Rivals Orchestrator - MVP Implementation"""
 import uuid
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from dataclasses import dataclass, field
-from orch.orchestration.models import TaskState, WorkspaceContext, AgentMessage
-from orch.orchestration.checkpoint import Checkpoint, CheckpointManager
+
+from orch.config.manager import ConfigManager
 from orch.config.schema import get_sessions_dir
+from orch.llm.client import LLMClientFactory
+from orch.orchestration.checkpoint import Checkpoint, CheckpointManager
+from orch.orchestration.complexity import ComplexityAnalyzer
+from orch.orchestration.models import AgentMessage
 
 
 @dataclass
@@ -121,7 +125,9 @@ class TeamOrchestrator:
         self.max_iterations = max_iterations
         self.session: OrchestrationSession | None = None
 
-    async def orchestrate(self, user_prompt: str, options: dict | None = None) -> OrchestrationResult:
+    async def orchestrate(
+        self, user_prompt: str, options: dict | None = None
+    ) -> OrchestrationResult:
         """Main entry point - runs team-of-rivals workflow"""
         options = options or {}
 
@@ -136,6 +142,30 @@ class TeamOrchestrator:
             # Checkpoint: init
             await self._checkpoint(checkpoint_mgr, "init")
 
+            # === Complexity Detection ===
+            if not options.get("complexity") or options.get("complexity") == "auto":
+                session.state = "analyzing_complexity"
+
+                config = ConfigManager.get_config()
+                llm_client = LLMClientFactory.create(config)
+
+                analyzer = ComplexityAnalyzer(llm_client, config)
+                complexity_result = await analyzer.analyze(
+                    user_prompt,
+                    None  # workspace_context - TODO: add in future
+                )
+
+                session.complexity_level = complexity_result.complexity_level
+
+                await self._checkpoint(
+                    checkpoint_mgr,
+                    "complexity_detected",
+                    complexity=complexity_result.to_dict()
+                )
+            else:
+                # Manual complexity specified
+                session.complexity_level = options["complexity"]
+
             # MVP: Simple workflow without actual agents
             # This demonstrates the structure - full implementation adds real agents
 
@@ -148,13 +178,17 @@ class TeamOrchestrator:
             session.state = "executing"
             results = {"status": "completed", "output": "MVP implementation"}
             session.metrics.executions_count = 1
-            await self._checkpoint(checkpoint_mgr, f"execution_{session.iteration}", results=results)
+            await self._checkpoint(
+                checkpoint_mgr, f"execution_{session.iteration}", results=results
+            )
 
             # Phase 3: Critique (simplified)
             session.state = "critiquing"
             critique = {"decision": "accept", "reason": "MVP passes"}
             session.metrics.critique_rounds = 1
-            await self._checkpoint(checkpoint_mgr, f"critique_{session.iteration}", critique=critique)
+            await self._checkpoint(
+                checkpoint_mgr, f"critique_{session.iteration}", critique=critique
+            )
 
             # Phase 4: Finalize
             session.state = "complete"
