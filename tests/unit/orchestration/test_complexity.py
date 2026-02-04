@@ -1,4 +1,7 @@
 """Tests for ComplexityAnalyzer."""
+
+from unittest.mock import Mock
+
 from orch.orchestration.complexity import (
     VALID_COMPLEXITY_LEVELS,
     VALID_TASK_TYPES,
@@ -22,7 +25,7 @@ def test_complexity_result_creation():
         reasoning="Auth task is security-critical",
         confidence=0.92,
         recommended_models={"planner": "high", "executor": "highest"},
-        source=DetectionSource.LLM_DETECTED
+        source=DetectionSource.LLM_DETECTED,
     )
 
     assert result.complexity_level == "complex"
@@ -38,7 +41,7 @@ def test_complexity_result_to_dict():
         reasoning="Needs tests",
         confidence=0.85,
         recommended_models={"planner": "medium"},
-        source=DetectionSource.LLM_DETECTED
+        source=DetectionSource.LLM_DETECTED,
     )
 
     data = result.to_dict()
@@ -56,3 +59,47 @@ def test_valid_constants():
 
     assert "security_sensitive" in VALID_TASK_TYPES
     assert "architectural" in VALID_TASK_TYPES
+
+
+def test_model_recommendations_simple():
+    """Test tier mapping for simple task."""
+    from orch.orchestration.complexity import ComplexityAnalyzer
+
+    mock_config = Mock()
+    mock_config.orchestration.complexity.confidence_threshold = 0.7
+
+    analyzer = ComplexityAnalyzer(None, mock_config)
+    models = analyzer._get_model_recommendations("simple", [])
+
+    assert models["planner"] == "low"
+    assert models["executor"] == "low"
+    assert models["security_critic"] == "medium"
+
+
+def test_model_recommendations_complex_security():
+    """Test tier mapping for complex security task."""
+    from orch.orchestration.complexity import ComplexityAnalyzer
+
+    mock_config = Mock()
+    mock_config.orchestration.complexity.confidence_threshold = 0.7
+
+    analyzer = ComplexityAnalyzer(None, mock_config)
+    models = analyzer._get_model_recommendations("complex", ["security_sensitive"])
+
+    assert models["planner"] == "high"
+    assert models["executor"] == "highest"
+    assert models["security_critic"] == "highest"
+
+
+def test_model_recommendations_standard_performance():
+    """Test task-type boost for performance task."""
+    from orch.orchestration.complexity import ComplexityAnalyzer
+
+    mock_config = Mock()
+    mock_config.orchestration.complexity.confidence_threshold = 0.7
+
+    analyzer = ComplexityAnalyzer(None, mock_config)
+    models = analyzer._get_model_recommendations("standard", ["performance_critical"])
+
+    assert models["planner"] == "medium"
+    assert models["executor"] == "high"  # Boosted from medium
