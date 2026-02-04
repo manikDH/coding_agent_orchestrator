@@ -1,8 +1,10 @@
 """Complexity analysis for automatic task classification."""
 
+import json
 import logging
 from dataclasses import dataclass, field
 from enum import Enum
+from pathlib import Path
 from typing import Literal
 
 logger = logging.getLogger(__name__)
@@ -117,3 +119,176 @@ class ComplexityAnalyzer:
             recommendations["correctness_critic"] = "medium"
 
         return recommendations
+
+    def _sanitize_string(self, s: str, max_length: int = 50) -> str:
+        """Sanitize string for inclusion in prompt."""
+        if not s:
+            return "unknown"
+        s = s.replace("{", "").replace("}", "").replace("\n", " ")
+        return s[:max_length].strip() or "unknown"
+
+    def _build_context(self, workspace_context) -> dict:
+        """
+        Build sanitized context dict for LLM prompt.
+
+        Privacy: Only include metadata, not file contents.
+        """
+        if workspace_context is None:
+            return {
+                "file_count": 0,
+                "recent_files": [],
+                "project_type": "unknown",
+                "has_tests": False,
+            }
+
+        # Sanitize file names - only basenames, limited count
+        recent_files = [
+            Path(f).name for f in workspace_context.recent_changes[:5]
+        ]
+
+        return {
+            "file_count": min(len(workspace_context.relevant_files), 1000),
+            "recent_files": recent_files,
+            "project_type": self._sanitize_string(workspace_context.project_type),
+            "has_tests": bool(workspace_context.has_tests),
+        }
+
+    def _build_detection_prompt(self, user_prompt: str, context: dict) -> str:
+        """
+        Build structured prompt for LLM classification with injection protection.
+        """
+        sanitized_prompt = user_prompt[:2000]
+        sanitized_prompt = sanitized_prompt.replace("```", "'''")
+
+        return f"""Analyze the software development task below and classify its complexity.
+
+=== TASK START ===
+{sanitized_prompt}
+=== TASK END ===
+
+Workspace metadata:
+- File count: {context['file_count']}
+- Recent files: {', '.join(context['recent_files']) if context['recent_files'] else 'none'}
+- Project type: {context['project_type']}
+- Has tests: {context['has_tests']}
+
+INSTRUCTIONS (follow exactly):
+
+1. Complexity levels:
+   - "simple": Single file, clear requirements, no edge cases
+   - "standard": Multiple files or moderate complexity
+   - "complex": Architectural changes, security-sensitive, or high risk
+
+2. Task types (select all that apply):
+   - security_sensitive: auth, crypto, tokens, permissions, secrets
+   - architectural: refactoring, redesign, migration, restructuring
+   - performance_critical: optimization, scaling, caching
+   - data_sensitive: database schema, migrations, data transforms
+   - testing_required: needs comprehensive test coverage
+
+3. Output ONLY this JSON (no explanation, no markdown):
+{{"complexity_level": "<level>", "task_types": ["<type1>"],
+  "reasoning": "<why>", "confidence": <0.0-1.0>}}"""
+
+    def _create_fallback_result(
+        self,
+        source: DetectionSource,
+        reason: str,
+        detected_level: str | None = None,
+        detected_types: list[str] | None = None
+    ) -> ComplexityResult:
+        """
+        Create fallback result using config default.
+
+        For low-confidence fallback, be conservative:
+        - If detected as "complex" but low confidence, still use "complex"
+        - Otherwise use config default
+        """
+        default = self.config.orchestration.default_complexity
+
+        # Handle "auto" default - use "standard" as safe middle ground
+        if default == "auto":
+            default = "standard"
+
+        # For low confidence, be conservative - if detected complex, stay complex
+        if source == DetectionSource.LOW_CONFIDENCE_FALLBACK and detected_level == "complex":
+            complexity = "complex"
+            task_types = detected_types or []
+        else:
+            complexity = default
+            task_types = []
+
+        recommended_models = self._get_model_recommendations(complexity, task_types)
+
+        return ComplexityResult(
+            complexity_level=complexity,
+            task_types=task_types,
+            reasoning=f"Fallback: {reason}",
+            confidence=0.0,
+            recommended_models=recommended_models,
+            source=source
+        )
+
+    def _extract_json(self, content: str) -> str:
+        """Extract JSON from content that may have markdown wrapper."""
+        content = content.strip()
+
+        # Remove markdown code block if present
+        if content.startswith("```"):
+            first_newline = content.find("\n")
+            if first_newline != -1:
+                last_fence = content.rfind("```")
+                if last_fence > first_newline:
+                    content = content[first_newline + 1 : last_fence].strip()
+
+        return content
+
+    def _validate_response(self, content: str) -> dict:
+        """
+        Validate LLM response against expected schema.
+
+        Raises:
+            LLMResponseError: If validation fails
+        """
+        json_content = self._extract_json(content)
+
+        try:
+            detection = json.loads(json_content)
+        except json.JSONDecodeError as e:
+            raise LLMResponseError(f"Invalid JSON response: {e}") from e
+
+        # Validate required fields
+        required_fields = ["complexity_level", "task_types", "reasoning", "confidence"]
+        missing = [f for f in required_fields if f not in detection]
+        if missing:
+            raise LLMResponseError(f"Missing required fields: {missing}")
+
+        # Validate complexity_level
+        if detection["complexity_level"] not in VALID_COMPLEXITY_LEVELS:
+            raise LLMResponseError(
+                f"Invalid complexity_level: {detection['complexity_level']}. "
+                f"Must be one of: {VALID_COMPLEXITY_LEVELS}"
+            )
+
+        # Validate task_types - filter to valid ones
+        if not isinstance(detection["task_types"], list):
+            raise LLMResponseError("task_types must be a list")
+        detection["task_types"] = [
+            t for t in detection["task_types"] if t in VALID_TASK_TYPES
+        ]
+
+        # Validate confidence
+        try:
+            detection["confidence"] = float(detection["confidence"])
+            if not 0.0 <= detection["confidence"] <= 1.0:
+                raise ValueError()
+        except (ValueError, TypeError) as e:
+            raise LLMResponseError(
+                f"Invalid confidence: {detection['confidence']}. Must be float 0.0-1.0"
+            ) from e
+
+        # Validate reasoning
+        if not isinstance(detection["reasoning"], str) or not detection["reasoning"].strip():
+            detection["reasoning"] = "No reasoning provided"
+
+        return detection
