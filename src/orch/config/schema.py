@@ -73,6 +73,23 @@ class TmuxConfig(BaseModel):
     auto_attach: bool = True
 
 
+class ComplexityConfig(BaseModel):
+    """Complexity detection configuration."""
+
+    confidence_threshold: float = Field(default=0.7, ge=0.0, le=1.0)
+    cache_enabled: bool = False
+    cache_ttl_seconds: int = 3600
+
+
+class OrchestrationConfig(BaseModel):
+    """Orchestration configuration for team-of-rivals."""
+
+    auto_detect: bool = True
+    default_complexity: str = "auto"  # "auto" | "simple" | "standard" | "complex"
+    detection_model: str = "claude-3-haiku-20240307"
+    complexity: ComplexityConfig = Field(default_factory=ComplexityConfig)
+
+
 class GlobalConfig(BaseModel):
     """Global orch configuration."""
 
@@ -91,6 +108,7 @@ class OrchConfig(BaseModel):
     competition: CompetitionConfig = Field(default_factory=CompetitionConfig)
     review: ReviewConfig = Field(default_factory=ReviewConfig)
     tmux: TmuxConfig = Field(default_factory=TmuxConfig)
+    orchestration: OrchestrationConfig = Field(default_factory=OrchestrationConfig)
     agents: dict[str, AgentConfig] = Field(default_factory=dict)
 
     class Config:
