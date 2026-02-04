@@ -1,5 +1,6 @@
 """Tests for LLM client."""
 
+import os
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
@@ -80,3 +81,57 @@ async def test_anthropic_client_complete():
 
         assert result.content == "response text"
         assert result.tokens_used == 30
+
+
+def test_factory_infer_anthropic_provider():
+    """Test factory infers Anthropic from claude- prefix."""
+    from orch.llm.client import LLMClientFactory
+
+    provider = LLMClientFactory._infer_provider("claude-3-haiku-20240307")
+    assert provider == "anthropic"
+
+
+def test_factory_infer_openai_provider():
+    """Test factory infers OpenAI from gpt- prefix."""
+    from orch.llm.client import LLMClientFactory
+
+    provider = LLMClientFactory._infer_provider("gpt-4o-mini")
+    assert provider == "openai"
+
+
+def test_factory_returns_none_without_api_key():
+    """Test factory returns None when no API key available."""
+    from orch.llm.client import LLMClientFactory
+
+    mock_config = Mock()
+    mock_config.orchestration.detection_model = "claude-3-haiku-20240307"
+
+    with patch.dict(os.environ, {}, clear=True):
+        client = LLMClientFactory.create(mock_config)
+
+    assert client is None
+
+
+def test_factory_creates_anthropic_client():
+    """Test factory creates Anthropic client with API key."""
+    from orch.llm.client import AnthropicLLMClient, LLMClientFactory
+
+    mock_config = Mock()
+    mock_config.orchestration.detection_model = "claude-3-haiku-20240307"
+
+    with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "test-key"}):
+        with patch('orch.llm.client.anthropic'):
+            client = LLMClientFactory.create(mock_config)
+
+    assert isinstance(client, AnthropicLLMClient)
+
+
+def test_factory_is_available():
+    """Test is_available returns True with API key."""
+    from orch.llm.client import LLMClientFactory
+
+    with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "key"}):
+        assert LLMClientFactory.is_available() is True
+
+    with patch.dict(os.environ, {}, clear=True):
+        assert LLMClientFactory.is_available() is False

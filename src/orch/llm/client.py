@@ -1,8 +1,10 @@
 """LLM client for complexity detection."""
 
 import logging
+import os
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from typing import ClassVar
 
 try:
     import anthropic
@@ -110,3 +112,76 @@ class OpenAILLMClient(LLMClient):
             model=model,
             tokens_used=response.usage.total_tokens if response.usage else 0,
         )
+
+
+class LLMClientFactory:
+    """
+    Factory for creating LLM clients based on configuration.
+
+    Supports multiple providers with automatic API key detection.
+    Falls back gracefully if no API key is available.
+    """
+
+    # Provider -> (env var, model prefix, client class)
+    PROVIDERS: ClassVar[dict[str, tuple[str, str, type]]] = {
+        "anthropic": ("ANTHROPIC_API_KEY", "claude-", AnthropicLLMClient),
+        "openai": ("OPENAI_API_KEY", "gpt-", OpenAILLMClient),
+    }
+
+    @classmethod
+    def create(
+        cls,
+        config,
+        preferred_provider: str | None = None
+    ) -> LLMClient | None:
+        """
+        Create an LLM client based on config and available API keys.
+
+        Returns LLMClient if API key available, None otherwise.
+        """
+        detection_model = config.orchestration.detection_model
+
+        # Determine provider from model name or preference
+        provider = preferred_provider
+        if not provider:
+            provider = cls._infer_provider(detection_model)
+
+        if not provider:
+            # Try to find any available provider
+            provider = cls._find_available_provider()
+
+        if not provider:
+            logger.warning("No LLM provider available (no API keys found)")
+            return None
+
+        # Get API key and create client
+        env_var, _, client_class = cls.PROVIDERS[provider]
+        api_key = os.getenv(env_var)
+
+        if not api_key:
+            logger.warning(f"No API key found for {provider} (set {env_var})")
+            return None
+
+        logger.info(f"Using {provider} LLM client for complexity detection")
+        return client_class(api_key)
+
+    @classmethod
+    def _infer_provider(cls, model: str) -> str | None:
+        """Infer provider from model name prefix."""
+        for provider, (_, prefix, _) in cls.PROVIDERS.items():
+            if model.startswith(prefix):
+                return provider
+        return None
+
+    @classmethod
+    def _find_available_provider(cls) -> str | None:
+        """Find first provider with available API key."""
+        for provider, (env_var, _, _) in cls.PROVIDERS.items():
+            if os.getenv(env_var):
+                return provider
+        return None
+
+    @classmethod
+    def is_available(cls) -> bool:
+        """Check if any LLM provider is available."""
+        return cls._find_available_provider() is not None
